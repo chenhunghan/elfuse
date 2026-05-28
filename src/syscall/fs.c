@@ -212,6 +212,7 @@ static int fd_alloc_opened_host(int host_fd,
     }
 
     fd_table[guest_fd].linux_flags = linux_flags;
+    fd_refresh_urandom_bitmap(guest_fd);
     if (dir)
         fd_table[guest_fd].dir = dir;
     return guest_fd;
@@ -451,13 +452,15 @@ static void install_fd_alias_metadata(int dst_fd,
                                       const fd_entry_t *src_snap,
                                       int linux_flags)
 {
-    int preserved_flags = src_snap->linux_flags &
-                          (LINUX_O_PATH | LINUX_O_DIRECTORY | LINUX_O_NOFOLLOW |
-                           LINUX_O_DIRECT | LINUX_O_LARGEFILE);
+    int preserved_flags =
+        src_snap->linux_flags &
+        (LINUX_O_ACCMODE | LINUX_O_PATH | LINUX_O_DIRECTORY | LINUX_O_NOFOLLOW |
+         LINUX_O_DIRECT | LINUX_O_LARGEFILE);
     fd_table[dst_fd].linux_flags = preserved_flags | linux_flags;
     fd_table[dst_fd].seals = src_snap->seals;
     memcpy(fd_table[dst_fd].proc_path, src_snap->proc_path,
            sizeof(fd_table[dst_fd].proc_path));
+    fd_refresh_urandom_bitmap(dst_fd);
 }
 
 /* Duplicate a guest fd into either the next free slot >= min_guest_fd or a

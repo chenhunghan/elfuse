@@ -28,6 +28,7 @@
 #include "utils.h"
 
 #include "core/rosetta.h"
+#include "core/shim-globals.h"
 #include "hvutil.h"
 #include "runtime/procemu.h"
 #include "runtime/thread.h"
@@ -245,7 +246,17 @@ static int64_t urandom_read(guest_t *g,
         count = avail;
 
     struct iovec iov = {.iov_base = dst, .iov_len = (size_t) count};
-    return urandom_fill_iov(guest_fd, &iov, 1);
+    int64_t rc = urandom_fill_iov(guest_fd, &iov, 1);
+
+    /* This slow path runs when the shim's identity-class fast path
+     * could not serve the read: either the request was larger than
+     * the shim's inline limit, or the ring was empty. Refill the
+     * shim's entropy ring before returning so a subsequent
+     * read(/dev/urandom) from the same vCPU sees a populated ring
+     * and stays on the fast path.
+     */
+    shim_globals_refill_urandom_ring(g);
+    return rc;
 }
 
 static bool rosetta_ioctl_target_fd(guest_t *g, int host_fd)
